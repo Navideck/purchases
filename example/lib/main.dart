@@ -84,7 +84,7 @@ class _MyHomePageState extends State<MyHomePage> {
           mainAxisAlignment: MainAxisAlignment.center,
           children: <Widget>[
             ValueListenableBuilder(
-                valueListenable: Purchases.purchaserInfo,
+                valueListenable: Purchases.customerInfo,
                 builder: (context, value, widget) {
                   return Text(
                     value.toString(),

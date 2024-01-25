@@ -1,8 +1,8 @@
-# purchases
+# Purchases
 
 https://pub.dev/packages/purchases
 
-An extension for the [purchases_flutter](https://pub.dev/packages/purchases_flutter), that allows to get the purchased information for every platform.
+This is a drop-in replacement of [purchases_flutter](https://pub.dev/packages/purchases_flutter) that allows getting purchase information on every platform.. You only need to import this package in your pubspec.yaml.
 
 ```dart
 

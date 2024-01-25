@@ -4,11 +4,11 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:purchases_flutter/models/purchases_configuration.dart';
 import 'package:purchases_flutter/purchases_flutter.dart' as rc;
 
-import 'models/purchaser_info.dart';
+import 'models/customer_info.dart';
 export 'package:purchases_flutter/purchases_flutter.dart' hide Purchases;
 
 class Purchases {
@@ -39,20 +39,28 @@ class Purchases {
     _updateUserId();
   }
 
-  static late ValueNotifier<rc.PurchaserInfo> _purchaserInfo =
+  static late ValueNotifier<rc.CustomerInfo> _customerInfo =
       _initPurchasesInfo();
 
-  static ValueNotifier<rc.PurchaserInfo> _initPurchasesInfo() {
+  static ValueNotifier<rc.CustomerInfo> _initPurchasesInfo() {
     _setupPurchasesInfo();
-    return ValueNotifier<rc.PurchaserInfo>(PurchaserInfo.empty());
+    return ValueNotifier<rc.CustomerInfo>(CustomerInfo.empty());
   }
+
+  /// Sets up Purchases with your API key and an app user id.
+  ///
+  /// [PurchasesConfiguration] Object containing configuration parameters
+  static Future<void> configure(
+    PurchasesConfiguration purchasesConfiguration,
+  ) =>
+      rc.Purchases.configure(purchasesConfiguration);
 
   static void _setupPurchasesInfo() async {
     assert(_apiKey != null);
     if (supportsSDK) {
       await _setupFuture;
-      rc.Purchases.addPurchaserInfoUpdateListener((purchaserInfo) {
-        _purchaserInfo.value = purchaserInfo;
+      rc.Purchases.addCustomerInfoUpdateListener((customerInfo) {
+        _customerInfo.value = customerInfo;
       });
     } else {
       await _getPurchaseInfo();
@@ -62,21 +70,21 @@ class Purchases {
   static void _updateUserId() {
     if (supportsSDK) {
       if (userId == null) {
-        rc.Purchases.reset();
+        // rc.Purchases.reset();  // TODO: Fix
       } else {
-        rc.Purchases.identify(userId!);
+        // rc.Purchases.identify(userId!);  // TODO: Fix
       }
     } else {
       _getPurchaseInfo();
     }
-    _purchaserInfo.value = PurchaserInfo.empty();
+    _customerInfo.value = CustomerInfo.empty();
   }
 
-  static ValueListenable<rc.PurchaserInfo> get purchaserInfo => _purchaserInfo;
+  static ValueListenable<rc.CustomerInfo> get customerInfo => _customerInfo;
 
-  static Future<rc.PurchaserInfo> _getPurchaseInfo() async {
+  static Future<rc.CustomerInfo> _getPurchaseInfo() async {
     assert(_apiKey != null, 'Needs to provide a useful key');
-    if (_userId == null) return PurchaserInfo.empty();
+    if (_userId == null) return CustomerInfo.empty();
     final url = 'https://api.revenuecat.com/v1/subscribers/app_user_id';
     final response = await http.get(Uri.parse(url), headers: {
       'Content-Type': 'application/json',
@@ -86,8 +94,8 @@ class Purchases {
       throw Exception('${response.statusCode}, message ${response.body}');
     }
     final json = jsonDecode(response.body)['subscriber'];
-    final info = PurchaserInfo.fromJson(json);
-    _purchaserInfo.value = info;
+    final info = rc.CustomerInfo.fromJson(json);
+    _customerInfo.value = info;
     return info;
   }
 
@@ -131,12 +139,13 @@ class Purchases {
   /// [type] If the products are Android INAPPs, this needs to be
   /// PurchaseType.INAPP otherwise the products won't be found.
   /// PurchaseType.Subs by default. This parameter only has effect in Android.
-  static Future<List<rc.Product>> getProducts(List<String> productIdentifiers,
-      {rc.PurchaseType type = rc.PurchaseType.subs}) {
-    return rc.Purchases.getProducts(productIdentifiers, type: type);
+  static Future<List<rc.StoreProduct>> getProducts(
+      List<String> productIdentifiers,
+      {rc.ProductCategory type = rc.ProductCategory.subscription}) {
+    return rc.Purchases.getProducts(productIdentifiers);
   }
 
-  /// Makes a purchase. Returns a [PurchaserInfo] object. Throws a
+  /// Makes a purchase. Returns a [CustomerInfo] object. Throws a
   /// [PlatformException] if the purchase is unsuccessful.
   /// Check if `PurchasesErrorHelper.getErrorCode(e)` is
   /// `PurchasesErrorCode.purchaseCancelledError` to check if the user cancelled
@@ -151,14 +160,14 @@ class Purchases {
   /// [type] If the product is an Android INAPP, this needs to be
   /// PurchaseType.INAPP otherwise the product won't be found.
   /// PurchaseType.Subs by default. This parameter only has effect in Android.
-  static Future<rc.PurchaserInfo> purchaseProduct(String productIdentifier,
+  static Future<rc.CustomerInfo> purchaseProduct(String productIdentifier,
       {rc.UpgradeInfo? upgradeInfo,
       rc.PurchaseType type = rc.PurchaseType.subs}) {
     return rc.Purchases.purchaseProduct(productIdentifier,
         upgradeInfo: upgradeInfo, type: type);
   }
 
-  /// Makes a purchase. Returns a [PurchaserInfo] object. Throws a
+  /// Makes a purchase. Returns a [CustomerInfo] object. Throws a
   /// [PlatformException] if the purchase is unsuccessful.
   /// Check if `PurchasesErrorHelper.getErrorCode(e)` is
   /// `PurchasesErrorCode.purchaseCancelledError` to check if the user cancelled
@@ -168,7 +177,7 @@ class Purchases {
   ///
   /// [upgradeInfo] Android only. Optional UpgradeInfo you wish to upgrade from
   /// containing the oldSKU and the optional prorationMode.
-  static Future<rc.PurchaserInfo> purchasePackage(rc.Package packageToPurchase,
+  static Future<rc.CustomerInfo> purchasePackage(rc.Package packageToPurchase,
       {rc.UpgradeInfo? upgradeInfo}) async {
     return rc.Purchases.purchasePackage(packageToPurchase,
         upgradeInfo: upgradeInfo);
@@ -176,7 +185,7 @@ class Purchases {
 
   /// iOS only. Purchase a product applying a given discount.
   ///
-  /// Returns a [PurchaserInfo] object. Throws a
+  /// Returns a [CustomerInfo] object. Throws a
   /// [PlatformException] if the purchase is unsuccessful.
   /// Check if `PurchasesErrorHelper.getErrorCode(e)` is
   /// `PurchasesErrorCode.purchaseCancelledError` to check if the user cancelled
@@ -186,14 +195,14 @@ class Purchases {
   ///
   /// [paymentDiscount] Discount to apply to the product. Retrieve this discount
   /// using [getPaymentDiscount].
-  static Future<rc.PurchaserInfo> purchaseDiscountedProduct(
-      rc.Product product, rc.PaymentDiscount discount) async {
+  static Future<rc.CustomerInfo> purchaseDiscountedProduct(
+      rc.StoreProduct product, rc.PromotionalOffer discount) async {
     return rc.Purchases.purchaseDiscountedProduct(product, discount);
   }
 
   /// iOS only. Purchase a package applying a given discount.
   ///
-  /// Returns a [PurchaserInfo] object. Throws a
+  /// Returns a [CustomerInfo] object. Throws a
   /// [PlatformException] if the purchase is unsuccessful.
   /// Check if `PurchasesErrorHelper.getErrorCode(e)` is
   /// `PurchasesErrorCode.purchaseCancelledError` to check if the user cancelled
@@ -203,30 +212,30 @@ class Purchases {
   ///
   /// [paymentDiscount] Discount to apply to the product. Retrieve this discount
   /// using [getPaymentDiscount].
-  static Future<rc.PurchaserInfo> purchaseDiscountedPackage(
-      rc.Package packageToPurchase, rc.PaymentDiscount discount) async {
+  static Future<rc.CustomerInfo> purchaseDiscountedPackage(
+      rc.Package packageToPurchase, rc.PromotionalOffer discount) async {
     return rc.Purchases.purchaseDiscountedPackage(packageToPurchase, discount);
   }
 
   /// Restores a user's previous purchases and links their appUserIDs to any
   /// user's also using those purchases.
   ///
-  /// Returns a [PurchaserInfo] object, or throws a [PlatformException] if there
+  /// Returns a [CustomerInfo] object, or throws a [PlatformException] if there
   /// was a problem restoring transactions.
-  static Future<rc.PurchaserInfo> restoreTransactions() async {
-    return rc.Purchases.restoreTransactions();
+  static Future<rc.CustomerInfo> restoreTransactions() async {
+    return rc.Purchases.restorePurchases();
   }
 
-  /// This function will alias two appUserIDs together.
-  ///
-  /// Returns a [PurchaserInfo] object, or throws a [PlatformException] if there
-  /// was a problem restoring transactions.
-  ///
-  /// [newAppUserID] The new appUserID that should be linked to the currently
-  /// identified appUserID.
-  static Future<rc.PurchaserInfo> createAlias(String newAppUserID) async {
-    return rc.Purchases.createAlias(newAppUserID);
-  }
+  // /// This function will alias two appUserIDs together.
+  // ///
+  // /// Returns a [CustomerInfo] object, or throws a [PlatformException] if there
+  // /// was a problem restoring transactions.
+  // ///
+  // /// [newAppUserID] The new appUserID that should be linked to the currently
+  // /// identified appUserID.
+  // static Future<rc.CustomerInfo> createAlias(String newAppUserID) async {
+  //   return rc.Purchases.createAlias(newAppUserID);
+  // }  // TODO: Fix
 
   /// Enables/Disables debugs logs
   static Future<void> setDebugLogsEnabled(bool enabled) {
@@ -238,19 +247,19 @@ class Purchases {
   /// More information: http://errors.rev.cat/ask-to-buy
   ///
   static Future<void> setSimulatesAskToBuyInSandbox(bool enabled) async {
- return rc.Purchases.setDebugLogsEnabled(enabled);
+    return rc.Purchases.setDebugLogsEnabled(enabled);
   }
 
   ///
   /// Set this property to your proxy URL before configuring Purchases *only* if you've received a proxy key value from your RevenueCat contact.
   ///
   static Future<void> setProxyURL(String url) async {
-     return rc.Purchases.setProxyURL(url);
+    return rc.Purchases.setProxyURL(url);
   }
 
-  /// Gets current purchaser info, which will normally be cached.
-  static Future<rc.PurchaserInfo> getPurchaserInfo() async {
-     return rc.Purchases.getPurchaserInfo();
+  /// Gets current customer info, which will normally be cached.
+  static Future<rc.CustomerInfo> getCustomerInfo() async {
+    return rc.Purchases.getCustomerInfo();
   }
 
   ///  This method will send all the purchases to the RevenueCat backend.
@@ -261,7 +270,7 @@ class Purchases {
   ///  This method should be called anytime a sync is needed, like after a
   ///  successful purchase.
   static Future<void> syncPurchases() async {
-     return rc.Purchases.syncPurchases();
+    return rc.Purchases.syncPurchases();
   }
 
   /// iOS only. Enable automatic collection of Apple Search Ad attribution. Disabled by
@@ -295,26 +304,27 @@ class Purchases {
   static Future<Map<String, rc.IntroEligibility>>
       checkTrialOrIntroductoryPriceEligibility(
           List<String> productIdentifiers) async {
- return rc.Purchases.checkTrialOrIntroductoryPriceEligibility(productIdentifiers);
+    return rc.Purchases.checkTrialOrIntroductoryPriceEligibility(
+        productIdentifiers);
   }
 
-  /// Invalidates the cache for purchaser information.
+  /// Invalidates the cache for customer information.
   ///
   /// Most apps will not need to use this method; invalidating the cache can leave your app in an invalid state.
-  /// Refer to https://docs.revenuecat.com/docs/purchaserinfo#section-get-user-information for more information on
+  /// Refer to https://docs.revenuecat.com/docs/customerinfo#section-get-user-information for more information on
   /// using the cache properly.
   ///
-  /// This is useful for cases where purchaser information might have been updated outside of the app, like if a
+  /// This is useful for cases where customer information might have been updated outside of the app, like if a
   /// promotional subscription is granted through the RevenueCat dashboard.
-  static Future<void> invalidatePurchaserInfoCache() async {
-     return rc.Purchases.invalidatePurchaserInfoCache();
+  static Future<void> invalidateCustomerInfoCache() async {
+    return rc.Purchases.invalidateCustomerInfoCache();
   }
 
   /// iOS only. Presents a code redemption sheet, useful for redeeming offer codes
   /// Refer to https://docs.revenuecat.com/docs/ios-subscription-offers#offer-codes for more information on how
   /// to configure and use offer codes
   static Future<void> presentCodeRedemptionSheet() async {
- return rc.Purchases.presentCodeRedemptionSheet();
+    return rc.Purchases.presentCodeRedemptionSheet();
   }
 
   ///================================================================================
@@ -330,7 +340,7 @@ class Purchases {
   ///
   /// [attributes] Map of attributes by key. Set the value as an empty string to delete an attribute.
   static Future<void> setAttributes(Map<String, String> attributes) async {
-     return rc.Purchases.setAttributes(attributes);
+    return rc.Purchases.setAttributes(attributes);
   }
 
   /// Subscriber attribute associated with the email address for the user
@@ -351,14 +361,14 @@ class Purchases {
   ///
   /// [displayName] Empty String or null will delete the subscriber attribute.
   static Future<void> setDisplayName(String displayName) async {
-     return rc.Purchases.setDisplayName(displayName);
+    return rc.Purchases.setDisplayName(displayName);
   }
 
   /// Subscriber attribute associated with the push token for the user
   ///
   /// [pushToken] Empty String or null will delete the subscriber attribute.
   static Future<void> setPushToken(String pushToken) async {
- return rc.Purchases.setPushToken(pushToken);
+    return rc.Purchases.setPushToken(pushToken);
   }
 
   /// Subscriber attribute associated with the Adjust Id for the user
@@ -366,7 +376,7 @@ class Purchases {
   ///
   /// [adjustID] Empty String or null will delete the subscriber attribute.
   static Future<void> setAdjustID(String adjustID) async {
- return rc.Purchases.setAdjustID(adjustID);
+    return rc.Purchases.setAdjustID(adjustID);
   }
 
   /// Subscriber attribute associated with the Appsflyer Id for the user
@@ -382,7 +392,7 @@ class Purchases {
   ///
   /// [fbAnonymousID] Empty String or null will delete the subscriber attribute.
   static Future<void> setFBAnonymousID(String fbAnonymousID) async {
-     return rc.Purchases.setFBAnonymousID(fbAnonymousID);
+    return rc.Purchases.setFBAnonymousID(fbAnonymousID);
   }
 
   /// Subscriber attribute associated with the mParticle Id for the user
@@ -390,7 +400,7 @@ class Purchases {
   ///
   /// [mparticleID] Empty String or null will delete the subscriber attribute.
   static Future<void> setMparticleID(String mparticleID) async {
-   return rc.Purchases.setMparticleID(mparticleID);
+    return rc.Purchases.setMparticleID(mparticleID);
   }
 
   /// Subscriber attribute associated with the OneSignal Player Id for the user
@@ -398,14 +408,14 @@ class Purchases {
   ///
   /// [onesignalID] Empty String or null will delete the subscriber attribute.
   static Future<void> setOnesignalID(String onesignalID) async {
- return rc.Purchases.setOnesignalID(onesignalID);
+    return rc.Purchases.setOnesignalID(onesignalID);
   }
 
   /// Subscriber attribute associated with the install media source for the user
   ///
   /// [mediaSource] Empty String or null will delete the subscriber attribute.
   static Future<void> setMediaSource(String mediaSource) async {
-     return rc.Purchases.setMediaSource(mediaSource);
+    return rc.Purchases.setMediaSource(mediaSource);
   }
 
   /// Subscriber attribute associated with the install campaign for the user
@@ -461,8 +471,8 @@ class Purchases {
   /// [product] The `Product` the user intends to purchase.
   ///
   /// [discount] The `Discount` to apply to the product.
-  static Future<rc.PaymentDiscount> getPaymentDiscount(
-      rc.Product product, rc.Discount discount) async {
-     return rc.Purchases.getPaymentDiscount(product, discount);
+  static Future<rc.PromotionalOffer> getPaymentDiscount(
+      rc.StoreProduct product, rc.StoreProductDiscount discount) async {
+    return rc.Purchases.getPromotionalOffer(product, discount);
   }
 }
